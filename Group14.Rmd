@@ -1,0 +1,163 @@
+---
+title: "Survey Data Analysis Report"
+author: "Group 14"
+date: "2024-06-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(survey)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+# Load the survey data
+survey_data <- read.csv("group14.csv", header=TRUE)
+names(survey_data) <- c("Gender", "Age", "Studies", "NumberOfPhysicalActivityPerWeek", "TypeOfPhysicalActivity", "WorkStudy")
+
+# Split WorkStudy into ECTS and HoursOfWork
+survey_data <- separate(survey_data, "WorkStudy", c("ECTS", "HoursOfWork"), sep=";")
+survey_data$ECTS <- as.numeric(survey_data$ECTS)
+survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
+survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(survey_data$NumberOfPhysicalActivityPerWeek)
+
+# Display the data
+survey_data
+```
+
+
+## Exploratory Data Analysis (EDA)
+
+### Visualization for Research Question 1
+
+```{r pressure, echo=FALSE}
+# Histogram of Physical Activity Frequency
+ggplot(survey_data, aes(x = NumberOfPhysicalActivityPerWeek)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(title = "Histogram of Physical Activity Frequency per Week",
+       x = "Number of Physical Activities per Week",
+       y = "Count")
+```
+### Comment on EDA
+
+The histogram shows the distribution of how often participants engage in physical activities per week. This helps us understand the general trend and spread of physical activity frequency among participants. It can be seen that some numbers are quite high, this could be either due to the question being understood wrong or outliers. Both cases should be considered. Therefore we create 2 different dataframes, one that considers the outliers and eliminates them and one that transforms the values by %20. 
+
+### Outlier removal 
+
+```{r pressure, echo=FALSE}
+Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
+Q3 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+survey_data_no_outliers <- survey_data %>%
+  filter(NumberOfPhysicalActivityPerWeek >= lower_bound & NumberOfPhysicalActivityPerWeek <= upper_bound)
+
+survey_data_no_outliers
+
+ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(title = "Histogram of Physical Activity Frequency per Week",
+       x = "Number of Physical Activities per Week",
+       y = "Count")
+```
+### Outlier removal 
+
+```{r pressure, echo=FALSE}
+Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
+Q3 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+survey_data_transformed <- survey_data %>%
+  mutate(NumberOfPhysicalActivityPerWeek = ifelse(
+    NumberOfPhysicalActivityPerWeek < lower_bound | NumberOfPhysicalActivityPerWeek > upper_bound,
+    NumberOfPhysicalActivityPerWeek / 20,
+    NumberOfPhysicalActivityPerWeek
+  ))
+
+survey_data_transformed
+ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(title = "Histogram of Physical Activity Frequency per Week",
+       x = "Number of Physical Activities per Week",
+       y = "Count")
+
+```
+
+## Descriptive Inference
+
+### Summary Statistics
+
+```{r pressure, echo=FALSE}
+summary_stats_transformed <- survey_data_transformed %>%
+  group_by(NumberOfPhysicalActivityPerWeek) %>%
+  summarise(
+    Mean_ECTS = mean(ECTS, na.rm = TRUE),
+    Mean_HoursOfWork = mean(HoursOfWork, na.rm = TRUE),
+    SD_ECTS = sd(ECTS, na.rm = TRUE),
+    SD_HoursOfWork = sd(HoursOfWork, na.rm = TRUE)
+  )
+summary_stats_no_outliers <- survey_data_no_outliers %>%
+  group_by(NumberOfPhysicalActivityPerWeek) %>%
+  summarise(
+    Mean_ECTS = mean(ECTS, na.rm = TRUE),
+    Mean_HoursOfWork = mean(HoursOfWork, na.rm = TRUE),
+    SD_ECTS = sd(ECTS, na.rm = TRUE),
+    SD_HoursOfWork = sd(HoursOfWork, na.rm = TRUE)
+  )
+summary_stats_transformed
+summary_stats_no_outliers
+
+```
+
+
+
+## Analytic Inference
+
+### Hypothesis Testing
+For this research question, we will use an independent t-test to compare the mean ECTS completed between participants who engage in regular physical activity (>=3 times per week) and those who do not.
+
+```{r pressure, echo=FALSE}
+# Linear regression model for original data
+model_original <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data)
+summary(model_original)
+
+# Linear regression model for transformed data
+model_transformed <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data_transformed)
+summary(model_transformed)
+
+# Linear regression model for no outlier data
+model_no_outliers <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data_no_outliers)
+summary(model_no_outliers)
+```
+
+```{r pressure, echo=FALSE}
+# Define survey design for original data
+survey_design <- svydesign(id = ~1, data = survey_data, weights = ~1)
+
+# Survey-weighted linear regression model for original data
+model_original <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design)
+summary(model_original)
+
+# Define survey design for transformed data
+survey_design_transformed <- svydesign(id = ~1, data = survey_data_transformed, weights = ~1)
+
+# Survey-weighted linear regression model for transformed data
+model_transformed <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design_transformed)
+summary(model_transformed)
+```
