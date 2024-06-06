@@ -133,31 +133,24 @@ summary_stats_no_outliers
 For this research question, we will use an independent t-test to compare the mean ECTS completed between participants who engage in regular physical activity (>=3 times per week) and those who do not.
 
 ```{r pressure, echo=FALSE}
-# Linear regression model for original data
+
 model_original <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data)
 summary(model_original)
 
-# Linear regression model for transformed data
 model_transformed <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data_transformed)
 summary(model_transformed)
 
-# Linear regression model for no outlier data
 model_no_outliers <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data_no_outliers)
 summary(model_no_outliers)
 ```
 
 ```{r pressure, echo=FALSE}
-# Define survey design for original data
-survey_design <- svydesign(id = ~1, data = survey_data, weights = ~1)
 
-# Survey-weighted linear regression model for original data
+survey_design <- svydesign(id = ~1, data = survey_data, weights = ~1)
 model_original <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design)
 summary(model_original)
 
-# Define survey design for transformed data
 survey_design_transformed <- svydesign(id = ~1, data = survey_data_transformed, weights = ~1)
-
-# Survey-weighted linear regression model for transformed data
 model_transformed <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design_transformed)
 summary(model_transformed)
 ```
