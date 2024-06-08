@@ -146,11 +146,37 @@ summary(model_no_outliers)
 
 ```{r pressure, echo=FALSE}
 
-survey_design <- svydesign(id = ~1, data = survey_data, weights = ~1)
-model_original <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design)
+survey_design_no_outliers <- svydesign(id = ~1, data = survey_data_no_outliers, weights = ~1)
+model_original <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design_no_outliers)
 summary(model_original)
 
 survey_design_transformed <- svydesign(id = ~1, data = survey_data_transformed, weights = ~1)
 model_transformed <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design_transformed)
 summary(model_transformed)
+```
+
+```{r pressure, echo=FALSE}
+# Create a scatterplot of ECTS vs. NumberOfPhysicalActivityPerWeek with regression line
+ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = ECTS)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
+  labs(title = "Scatterplot of ECTS vs. Number of Physical Activities per Week",
+       x = "Number of Physical Activities per Week",
+       y = "ECTS Credits") +
+  theme_minimal()
+
+ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = ECTS)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
+  labs(title = "Scatterplot of ECTS vs. Number of Physical Activities per Week",
+       x = "Number of Physical Activities per Week",
+       y = "ECTS Credits") +
+  theme_minimal()
+
+
+# Create a new data frame for predictions
+new_data <- survey_data_no_outliers %>%
+  mutate(Predicted_ECTS = predict(model_original, newdata = survey_data_no_outliers))
+
+
 ```
