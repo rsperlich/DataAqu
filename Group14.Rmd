@@ -1,8 +1,10 @@
 ---
 title: "Survey Data Analysis Report"
 author: "Group 14"
-date: "2024-06-06"
-output: pdf_document
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -12,29 +14,53 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(survey)
+library(knitr)
 ```
 
-## R Markdown
+# Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+Group members:  
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+- Jonas Neumair (11911064)
+- Raphael Sperlich (11909380)
+- David Baumgartner (11721765)
+
+Topic: Physical activity and Productivity
+
+Research questions we want to answer:  
+
+1. Individuals who engage in regular physical activity will demonstrate a higher level of productivity in completing tasks for university or work compared to those who do not engage in regular physical activity.
+2. Younger participants perform more physical activity per week than older ones.
+3. Full-time students engage in more variety of physical activities (2+) compared to students who work.
+
+## Prepare data
 
 ```{r cars}
 # Load the survey data
 survey_data <- read.csv("group14.csv", header=TRUE)
-names(survey_data) <- c("Gender", "Age", "Studies", "NumberOfPhysicalActivityPerWeek", "TypeOfPhysicalActivity", "WorkStudy")
+names(survey_data) <- c("Gender", "Age", "Studies", 
+                        "NumberOfPhysicalActivityPerWeek", 
+                        "TypeOfPhysicalActivity", 
+                        "WorkStudy")
 
 # Split WorkStudy into ECTS and HoursOfWork
-survey_data <- separate(survey_data, "WorkStudy", c("ECTS", "HoursOfWork"), sep=";")
-survey_data$ECTS <- as.numeric(survey_data$ECTS)
+survey_data <- separate(survey_data, 
+                        "WorkStudy", 
+                        c("ECTS", "HoursOfWork"), sep=";")
+
+# unify different comma representations for ECTS before coercion
+survey_data$ECTS <- as.numeric(sub(",", ".", survey_data$ECTS, fixed = TRUE))
 survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
-survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(survey_data$NumberOfPhysicalActivityPerWeek)
+survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(
+  survey_data$NumberOfPhysicalActivityPerWeek)
 
 # Display the data
-survey_data
+kable(head(survey_data), caption = "Survey data set")
 ```
 
+With the data prepared, we can now answer our research questions.  
+
+# Research Question 1
 
 ## Exploratory Data Analysis (EDA)
 
@@ -65,14 +91,18 @@ upper_bound <- Q3 + 1.5 * IQR
 survey_data_no_outliers <- survey_data %>%
   filter(NumberOfPhysicalActivityPerWeek >= lower_bound & NumberOfPhysicalActivityPerWeek <= upper_bound)
 
-survey_data_no_outliers
+kable(head(survey_data_no_outliers), 
+      caption = "Data with removed outliers in physical activity")
+```
 
+```{r}
 ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek)) +
   geom_histogram(binwidth = 1, fill = "blue", color = "black") +
   labs(title = "Histogram of Physical Activity Frequency per Week",
        x = "Number of Physical Activities per Week",
        y = "Count")
 ```
+
 ### Outlier removal 
 
 ```{r pressure, echo=FALSE}
@@ -90,13 +120,16 @@ survey_data_transformed <- survey_data %>%
     NumberOfPhysicalActivityPerWeek
   ))
 
-survey_data_transformed
+kable(head(survey_data_transformed), 
+      caption = "Data with transformed physical activity")
+```
+
+```{r}
 ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek)) +
   geom_histogram(binwidth = 1, fill = "blue", color = "black") +
   labs(title = "Histogram of Physical Activity Frequency per Week",
        x = "Number of Physical Activities per Week",
        y = "Count")
-
 ```
 
 ## Descriptive Inference
@@ -120,17 +153,23 @@ summary_stats_no_outliers <- survey_data_no_outliers %>%
     SD_ECTS = sd(ECTS, na.rm = TRUE),
     SD_HoursOfWork = sd(HoursOfWork, na.rm = TRUE)
   )
-summary_stats_transformed
-summary_stats_no_outliers
-
 ```
 
+```{r}
+kable(summary_stats_transformed, 
+      caption = "Summary statistics transformed data")
+```
 
+```{r}
+kable(summary_stats_no_outliers, 
+      caption = "Summary statistics no outliers in physical activities")
+```
 
 ## Analytic Inference
 
 ### Hypothesis Testing
-For this research question, we will use an independent t-test to compare the mean ECTS completed between participants who engage in regular physical activity (>=3 times per week) and those who do not.
+
+For this research question, we will use an independent t-test to compare the mean ECTS completed between participants who engage in regular physical activity (>=3 times per week) and those who do not.  
 
 ```{r pressure, echo=FALSE}
 
@@ -177,6 +216,257 @@ ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = ECT
 # Create a new data frame for predictions
 new_data <- survey_data_no_outliers %>%
   mutate(Predicted_ECTS = predict(model_original, newdata = survey_data_no_outliers))
-
-
 ```
+
+
+# Research Question 2
+
+## Exploratory data analysis
+
+To get a first impression, we can first check the change of the number of physical activity per week with increasing age. We continue using the data frames `survey_data_no_outliers` and `survey_data_transformed` because are again researching on the attribute number of physical activities per week.  
+
+```{r}
+survey_data_grouped_age <- survey_data_no_outliers %>%
+  group_by(Age) %>%
+  summarise(Mean_PhysicalActivity = mean(NumberOfPhysicalActivityPerWeek))
+
+ggplot(survey_data_grouped_age, aes(x = Age, y = Mean_PhysicalActivity)) +
+  geom_col(fill = "blue", color = "black") +
+  geom_vline(xintercept = median(survey_data_grouped_age$Age), 
+             linetype = "dashed", 
+             color = "red") +
+  annotate("text", 
+           x=median(survey_data_grouped_age$Age)+1, 
+           y=4, 
+           label="Median age", 
+           angle=90, 
+           color="red") +
+  labs(title = "Change of mean number of physical activity per week per age",
+       x = "Age",
+       y = "Mean number of physical activity per week")
+```
+
+The plot shows, that we have some missing ages across the whole survey data - mostly with age values larger then the median age. We can also see, that we have the largest mean with age 45. With this plot, it is not very clear if younger participants really perform more physical activities but it seems like "younger" (age < median) participants participate in more physical activities.  
+
+In order to analyse if younger participants perform more physical activity per week more precisely, we need to create at least two age groups. We will categorize the participants based on the median age. Splitting on the median should leave us with relatively balanced groups in the age groups. Ages larger as the median are set in the "over" and smaller ones in the "under" group. We are performing this categorization on the original and transformed data set.  
+
+```{r}
+# no outlier survey data set
+survey_data_no_outliers$AgeGroup <- 
+  as.factor(
+    ifelse(survey_data_no_outliers$Age > median(survey_data_no_outliers$Age), 
+         "over", "under")
+  )
+
+# transformed survey data set
+survey_data_transformed$AgeGroup <- 
+  as.factor(
+    ifelse(survey_data_transformed$Age > median(survey_data_transformed$Age), 
+         "over", "under")
+  )
+```
+
+We can visualize both groups by grouping the age group and computing the mean of number of physical activities. This can give us a good first impression if we have a difference in the groups. We start with the bar plots for the data without outliers.   
+
+```{r}
+data_outlier_agegroup <- survey_data_no_outliers %>%
+  group_by(AgeGroup) %>%
+  summarise(mean_PhysicalActivity = mean(NumberOfPhysicalActivityPerWeek, 
+                                         na.rm = TRUE))
+
+ggplot(data_outlier_agegroup, 
+  aes(x = AgeGroup, y = mean_PhysicalActivity, fill = AgeGroup)) +
+  geom_col(color = "black") +
+  labs(title = "Change of mean number of physical activity per week per age",
+       subtitle = "with no outlier data",
+       x = "Age",
+       y = "Mean number of physical activity per week")
+```
+
+We also check the transformed data.  
+
+```{r}
+data_transformed_agegroup <- survey_data_transformed %>%
+  group_by(AgeGroup) %>%
+  summarise(mean_PhysicalActivity = mean(NumberOfPhysicalActivityPerWeek, 
+                                         na.rm = TRUE))
+
+ggplot(data_transformed_agegroup, 
+  aes(x = AgeGroup, y = mean_PhysicalActivity, fill = AgeGroup)) +
+  geom_col(color = "black") +
+  labs(title = "Change of mean number of physical activity per week per age",
+       subtitle = "with transformed data",
+       x = "Age",
+       y = "Mean number of physical activity per week")
+```
+
+The exploratory data analysis indicates that we have a difference in number of physical activities between age groups. With plots alone, we cannot proof nor disproof if the hypothesis is true. We need to check, if the results are significant and did not happen just by chance. So, we will check summary statistics and then apply hypothesis tests.  
+
+## Descriptive Inference
+
+### Summary statistics
+
+We, again gather statistical information with mean, median and standard deviation in number of physical activities per week with grouped age group.  
+
+```{r pressure, echo=FALSE}
+summary_stats_transformed_rq2 <- survey_data_transformed %>%
+  group_by(AgeGroup) %>%
+  summarise(
+    Mean_physical = mean(NumberOfPhysicalActivityPerWeek, na.rm = TRUE),
+    Median_physical = median(NumberOfPhysicalActivityPerWeek, na.rm = TRUE),
+    SD_physical = sd(NumberOfPhysicalActivityPerWeek, na.rm = TRUE),
+  )
+
+summary_stats_no_outliers_rq2 <- survey_data_no_outliers %>%
+  group_by(AgeGroup) %>%
+  summarise(
+    Mean_physical = mean(NumberOfPhysicalActivityPerWeek, na.rm = TRUE),
+    Median_physical = median(NumberOfPhysicalActivityPerWeek, na.rm = TRUE),
+    SD_physical = sd(NumberOfPhysicalActivityPerWeek, na.rm = TRUE),
+  )
+```
+
+We, can combine the metrics into one data frame and visualize the results for both methods (no outliers and transformed).  
+
+```{r}
+# combine into one df
+summary_stats_rq2 <- tibble(
+  AgeGroup = c(summary_stats_no_outliers_rq2$AgeGroup, 
+               summary_stats_transformed_rq2$AgeGroup),
+  Mean = c(summary_stats_no_outliers_rq2$Mean_physical, 
+           summary_stats_transformed_rq2$Mean_physical),
+  Median = c(summary_stats_no_outliers_rq2$Median_physical, 
+             summary_stats_transformed_rq2$Median_physical),
+  SD = c(summary_stats_no_outliers_rq2$SD_physical, 
+         summary_stats_transformed_rq2$SD_physical),
+  Method = c(rep("Transform", length(summary_stats_no_outliers_rq2$AgeGroup)), 
+             rep("Outlier", length(summary_stats_transformed_rq2$AgeGroup)))
+)
+```
+
+
+
+```{r}
+ggplot(summary_stats_rq2, aes(x = AgeGroup, y = Median, fill = AgeGroup)) +
+  geom_col() +
+  labs(
+    title = "Median number of physical activities in age groups per methods",
+    x = "Age groups",
+    y = "Median") +
+  theme(legend.position = "none") +
+  facet_wrap(~ Method)
+```
+
+```{r}
+ggplot(summary_stats_rq2, aes(x = AgeGroup, y = Mean, fill = AgeGroup)) +
+  geom_col() +
+  labs(
+    title = "Mean number of physical activities in age groups per methods",
+    x = "Age groups",
+    y = "Median") +
+  theme(legend.position = "none") +
+  facet_wrap(~ Method)
+```
+
+The plots of statistical metrics show us, that the "under" group constantly has higher values compare to the "over" age group. This indicates that our hypothesis could hold that "younger" participants perform more sport compared to "older" ones.  
+
+We can also visually compare both groups by a boxplot.  
+
+```{r}
+ggplot(survey_data_transformed, 
+       aes(x = AgeGroup, 
+           y = NumberOfPhysicalActivityPerWeek, 
+           fill = AgeGroup)) +
+  geom_boxplot() +
+  labs(
+    title = "Activities per Week by Age Group",
+    subtitle = "with transformation",
+    x = "Age Group", 
+    y = "Activities per Week") +
+  theme(legend.position = "none")
+```
+
+
+```{r}
+ggplot(survey_data_no_outliers, 
+       aes(x = AgeGroup, 
+           y = NumberOfPhysicalActivityPerWeek, 
+           fill = AgeGroup)) +
+  geom_boxplot() +
+  labs(
+    title = "Activities per Week by Age Group", 
+    subtitle = "with no outliers",
+    x = "Age Group", 
+    y = "Activities per Week") +
+  theme(legend.position = "none")
+```
+
+Here, we can see, that the difference of the groups is smaller with the "no outliers" approach, but both groups again show a visual difference between the groups.  
+
+## Analytic Inference
+
+To test if our results are not just by chance, we need to perform hypothesis tests. When the data in the groups is normally distributed, we can use a independent t-test, otherwise we can use the Mann-Whitney U Test.  
+
+### Test for nomal distribution
+
+We chose to test the distribution with the Shapiro-Wilk Test. In our case we apply the test to see if number of physical activity per week is following a normal distribution for "under" and "over" age groups. We define a confidence value of `0.05`, to accept or reject the null hypothesis, which says the sample is following a normal distribution.   
+
+```{r}
+shapiro.test(
+  survey_data_transformed$NumberOfPhysicalActivityPerWeek[survey_data_transformed$AgeGroup == "under"])
+
+shapiro.test(
+  survey_data_transformed$NumberOfPhysicalActivityPerWeek[survey_data_transformed$AgeGroup == "over"])
+```
+
+For the transformed data set, we can see, that number of physical activities in the group "under" does not follow a normal distribution (p-value < 0.05 &rarr reject null hypothesis).  
+
+
+```{r}
+shapiro.test(
+  survey_data_no_outliers$NumberOfPhysicalActivityPerWeek[survey_data_no_outliers$AgeGroup == "under"])
+
+shapiro.test(
+  survey_data_no_outliers$NumberOfPhysicalActivityPerWeek[survey_data_no_outliers$AgeGroup == "over"])
+```
+
+For the method "no outliers", we can see that the values in the group "over" also do not follow a normal distribution.  
+
+### Hypothesis testing
+
+Since, our groups do not follow a normal distribution, we need to apply a different significance test. We chose to use the Mann-Whitney U Test.
+
+```{r}
+wilcox.test(
+  NumberOfPhysicalActivityPerWeek ~ AgeGroup, 
+  data = survey_data_transformed
+)
+
+wilcox.test(
+  NumberOfPhysicalActivityPerWeek ~ AgeGroup, 
+  data = survey_data_no_outliers
+)
+```
+
+The test shows for both method a p-value larger then 0.05 and therefore, we do not have significant difference between groups "over" and "under". The warning in the code indicates, that the exact p-value could not be computed due to ties in the rank. So, to make sure we can proof or disproof a significant difference, we use a linear model and evaluate results.  
+
+```{r}
+model_transformed_rq2 <- lm(NumberOfPhysicalActivityPerWeek ~ AgeGroup, 
+                     data = survey_data_transformed)
+summary(model_transformed_rq2)
+
+model_outliers_rq2 <- lm(NumberOfPhysicalActivityPerWeek ~ AgeGroup, 
+                     data = survey_data_no_outliers)
+summary(model_outliers_rq2)
+```
+
+The results show, that we do not have a significant correlation between the number of physical activities per week and the age group.
+
+## Evaluation
+
+The plots in the EDA indicated, that we have a difference between age groups and that "younger" participants have more active days in a week compared to "older" ones. Statistical summaries further showed the same results as the EDA investigation. But after evaluating the significance tests, we can say that there is no significant evidence that for our second research question.  
+
+# Research question 3
+
+...
+
