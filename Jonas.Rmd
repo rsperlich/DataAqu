@@ -113,7 +113,7 @@ summary_r3 <- r3_data %>%
   )
 
 ggplot(r3_data, 
-       aes(x = Category 
+       aes(x = Category, 
            y = NumberOfDifferentActivity, 
            fill = Category)) +
   geom_boxplot() +

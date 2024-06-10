@@ -122,6 +122,18 @@ survey_data_transformed <- survey_data %>%
 
 kable(head(survey_data_transformed), 
       caption = "Data with transformed physical activity")
+
+# transofrm ects to work hours per week
+survey_data_transformed <- survey_data_transformed %>%
+  mutate(hours_of_work_ects = ECTS * 25 / 16)
+survey_data_no_outliers <- survey_data_no_outliers %>%
+  mutate(hours_of_work_ects = ECTS * 25 / 16)
+# Create the composite measure
+survey_data_transformed <- survey_data_transformed %>%
+  mutate(CompositeProductivity = hours_of_work_ects + HoursOfWork)
+
+survey_data_no_outliers <- survey_data_no_outliers %>%
+  mutate(CompositeProductivity = hours_of_work_ects + HoursOfWork)
 ```
 
 ```{r}
@@ -169,18 +181,26 @@ kable(summary_stats_no_outliers,
 
 ### Hypothesis Testing
 
-For this research question, we will use an independent t-test to compare the mean ECTS completed between participants who engage in regular physical activity (>=3 times per week) and those who do not.  
-
 ```{r pressure, echo=FALSE}
 
-model_original <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data)
-summary(model_original)
+model_transformed_ects <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek, data = survey_data_transformed)
+summary(model_transformed_ects)
 
-model_transformed <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data_transformed)
-summary(model_transformed)
+model_no_outliers_ects <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek, data = survey_data_no_outliers)
+summary(model_no_outliers_ects)
 
-model_no_outliers <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, data = survey_data_no_outliers)
-summary(model_no_outliers)
+model_transformed_HoursOfWork <- lm(HoursOfWork ~ NumberOfPhysicalActivityPerWeek, data = survey_data_transformed)
+summary(model_transformed_HoursOfWork)
+
+model_no_outliers_HoursOfWork <- lm(HoursOfWork ~ NumberOfPhysicalActivityPerWeek, data = survey_data_no_outliers)
+summary(model_no_outliers_HoursOfWork)
+
+model_transformed_HoursOfWork <- lm(NumberOfPhysicalActivityPerWeek ~ CompositeProductivity, data = survey_data_transformed)
+summary(model_transformed_HoursOfWork)
+
+model_no_outliers_HoursOfWork <- lm(  NumberOfPhysicalActivityPerWeek ~ CompositeProductivity, data = survey_data_no_outliers)
+summary(model_no_outliers_HoursOfWork)
+
 ```
 
 ```{r pressure, echo=FALSE}
@@ -212,10 +232,21 @@ ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = ECT
        y = "ECTS Credits") +
   theme_minimal()
 
+ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = CompositeProductivity)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
+  labs(title = "Scatterplot of Composite Productivity vs. Number of Physical Activities per Week",
+       x = "Number of Physical Activities per Week",
+       y = "Composite Productivity (Hours of Work + ECTS)") +
+  theme_minimal()
+ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = CompositeProductivity)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
+  labs(title = "Scatterplot of Composite Productivity vs. Number of Physical Activities per Week",
+       x = "Number of Physical Activities per Week",
+       y = "Composite Productivity (Hours of Work + ECTS)") +
+  theme_minimal()
 
-# Create a new data frame for predictions
-new_data <- survey_data_no_outliers %>%
-  mutate(Predicted_ECTS = predict(model_original, newdata = survey_data_no_outliers))
 ```
 
 
