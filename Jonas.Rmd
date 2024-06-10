@@ -1,0 +1,142 @@
+---
+title: "NewGroup14"
+author: "Jonas Neumair"
+date: "2024-06-10"
+output: pdf_document
+---
+
+
+# R3: Full-time students engage in more variety of physical activities (2+) compared to students who work.
+
+
+```{r include=FALSE}
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+```
+
+
+```{r file-loading}
+# Load the survey data
+survey_data <- read.csv("group14.csv", header=TRUE)
+names(survey_data) <- c("Gender", "Age", "Studies", "NumberOfPhysicalActivityPerWeek", "TypeOfPhysicalActivity", "WorkStudy")
+
+# Split WorkStudy into ECTS and HoursOfWork
+survey_data <- separate(survey_data, "WorkStudy", c("ECTS", "HoursOfWork"), sep=";")
+
+# Fix comma seperated numbers like 17,5 to 17.5 in order to not create NA values
+survey_data$ECTS <- as.numeric(str_replace(survey_data$ECTS, ",", "."))
+survey_data$ECTS <- survey_data$ECTS %>%
+  replace(is.na(.), 0)
+
+survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
+
+# We have 2 invalid inputs, "not often" and "Sunday", both resulting in a NA
+# "Sunday" will be translated to 1, as we can assume, that if the person did sports more than once a week, they would
+# have input more days
+# However, not often is too weak to make a correct assumptions, which we therefor delete the entry
+survey_data$NumberOfPhysicalActivityPerWeek <- str_replace(survey_data$NumberOfPhysicalActivityPerWeek, "Sunday", "1")
+survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(survey_data$NumberOfPhysicalActivityPerWeek)
+survey_data <- survey_data %>%
+  filter(!is.na(NumberOfPhysicalActivityPerWeek))
+
+# 1 ECTS = 25 Hours, Approximately 16 weeks per semester
+survey_data$WeeklyHours <- survey_data$HoursOfWork + ((survey_data$ECTS*25)/16)
+
+r3_data <- survey_data %>%
+  select(NumberOfPhysicalActivityPerWeek, TypeOfPhysicalActivity, HoursOfWork)
+```
+In order to answer R3 we need to define who is a Full-time student and who is a Working student.
+
+```{r student-types}
+r3_data <- r3_data %>%
+  mutate(Category = if_else(HoursOfWork==0, "Full-Time Student", "Working Student"))
+
+r3_data %>%
+  ggplot(aes(x=Category)) +
+  geom_histogram(stat = "count") +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.2, size = 5) +
+  labs(
+    title = "Count of Full-Time Students and Working Students",
+    x = "Category",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+```
+In addition we need to extract the different activities to sum up the amount of different physical activities each person is performing.
+
+```{r physical-variety}
+types_of_physcial_activity <- c("StrengthTraining", "Cardio", "RecreationalActivities", "BallSports", "FlexibilityAndMobilit", "MartialArt", "Other")
+
+r3_data <- r3_data %>%
+  mutate(StrengthTraining = if_else(str_detect(TypeOfPhysicalActivity, "Strength Training"), 1, 0),
+         Cardio = if_else(str_detect(TypeOfPhysicalActivity, "Cardio"), 1, 0),
+         RecreationalActivities = if_else(str_detect(TypeOfPhysicalActivity, "Recreational Activities"), 1, 0),
+         BallSports = if_else(str_detect(TypeOfPhysicalActivity, "Ball Sports"), 1, 0),
+         FlexibilityAndMobilit = if_else(str_detect(TypeOfPhysicalActivity, "Flexibility and Mobilit"), 1, 0),
+         MartialArt = if_else(str_detect(TypeOfPhysicalActivity, "Martial Art"), 1, 0),
+         Other = if_else(str_detect(TypeOfPhysicalActivity, "Other"), 1, 0)
+         ) %>%
+  select(-TypeOfPhysicalActivity)
+
+r3_data <- r3_data %>%
+  mutate(NumberOfDifferentActivity = rowSums(r3_data[, types_of_physcial_activity]))
+
+
+r3_data %>%
+  group_by(Category) %>%
+  summarize(
+    MeanNumberOfDifferentActivity=mean(NumberOfDifferentActivity)
+  ) %>%
+  ggplot(aes(x=Category, y=MeanNumberOfDifferentActivity)) +
+  geom_col() +
+  labs(
+    title = "Number Of Different Activity for Full-Time Students and Working Students",
+    x = "Category",
+    y = "Number Of Different Activities"
+  ) +
+  theme_minimal()
+```
+We can see that full-time students do a slightly higher variety of activities compared to working students.
+
+## Statistical
+
+```{r stats}
+summary_r3 <- r3_data %>%
+  group_by(Category) %>%
+  summarize(
+    MeanNumberOfDifferentActivity = mean(NumberOfDifferentActivity),
+    MedianNumberOfDifferentActivity = median(NumberOfDifferentActivity),
+    SDNumberOfDifferentActivity = sd(NumberOfDifferentActivity),
+  )
+
+ggplot(r3_data, 
+       aes(x = Category 
+           y = NumberOfDifferentActivity, 
+           fill = Category)) +
+  geom_boxplot() +
+  labs(
+    title = "Activities per Week by Age Group",
+    subtitle = "with transformation",
+    x = "Age Group", 
+    y = "Activities per Week") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+```{r}
+shapiro.test(
+  r3_data$NumberOfDifferentActivity[r3_data$Category == "Full-Time Student"])
+
+shapiro.test(
+  r3_data$NumberOfDifferentActivity[r3_data$Category == "Working Student"])
+```
+
+```{r}
+wilcox.test(
+  NumberOfDifferentActivity ~ Category, 
+  data = r3_data
+)
+```
+Since the p-value is above 0.05 we do accept our Null-Hypothesis and can therefore say, that Full-time students do not significantly perform a higher variety of physical activity.
