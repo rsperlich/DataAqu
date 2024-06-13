@@ -272,7 +272,7 @@ ggplot(survey_data_grouped_age, aes(x = Age, y = Mean_PhysicalActivity)) +
            label="Median age", 
            angle=90, 
            color="red") +
-  labs(title = "Change of mean number of physical activity per week per age",
+  labs(title = "Mean number of physical activity in a week per age",
        x = "Age",
        y = "Mean number of physical activity per week")
 ```
@@ -424,7 +424,7 @@ ggplot(summary_stats_rq2, aes(x = AgeGroup, y = Mean, fill = AgeGroup)) +
   labs(
     title = "Mean number of physical activities in age groups per methods",
     x = "Age groups",
-    y = "Median") +
+    y = "Mean") +
   theme(legend.position = "none") +
   facet_wrap(~ Method)
 ```
