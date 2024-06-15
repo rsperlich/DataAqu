@@ -514,5 +514,25 @@ The plots in the EDA indicated, that we have a difference between age groups and
 
 # Research question 3
 
+"Full-time students engage in more variety of physical activities (2+) compared to students who work."
+
+## Exploratory Data Analysis
+
+
+
+
+
+Choose appropriate methods to explore the categorical and quantitative features in your data set (one visualization per research question). Briefly explain the methods and comment on your findings.
+
+## Descriptive Inference
+
+Compute suitable summary statistics and display the results in a table.
+
+## Analytic Inference
+
+Select an appropriate test statistic to test your hypothesis. Summarize the results and explain how your findings are connected to your research question.
+Guidelines for the presentation:
+
 ...
+
 
