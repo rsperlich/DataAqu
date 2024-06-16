@@ -15,7 +15,10 @@ library(dplyr)
 library(tidyr)
 library(survey)
 library(knitr)
+library(exactRankTests)
 ```
+
+\newpage
 
 # Introduction
 
@@ -60,13 +63,15 @@ kable(head(survey_data), caption = "Survey data set")
 
 With the data prepared, we can now answer our research questions.  
 
+\newpage
+
 # Research Question 1
 
 ## Exploratory Data Analysis (EDA)
 
 ### Visualization for Research Question 1
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 # Histogram of Physical Activity Frequency
 ggplot(survey_data, aes(x = NumberOfPhysicalActivityPerWeek)) +
   geom_histogram(binwidth = 1, fill = "blue", color = "black") +
@@ -80,7 +85,7 @@ The histogram shows the distribution of how often participants engage in physica
 
 ### Outlier removal 
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
 Q3 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.75, na.rm = TRUE)
 IQR <- Q3 - Q1
@@ -105,7 +110,7 @@ ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek)) +
 
 ### Outlier removal 
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
 Q3 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.75, na.rm = TRUE)
 IQR <- Q3 - Q1
@@ -148,7 +153,7 @@ ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek)) +
 
 ### Summary Statistics
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 summary_stats_transformed <- survey_data_transformed %>%
   group_by(NumberOfPhysicalActivityPerWeek) %>%
   summarise(
@@ -181,7 +186,7 @@ kable(summary_stats_no_outliers,
 
 ### Hypothesis Testing
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 
 model_transformed_ects <- lm(ECTS ~ NumberOfPhysicalActivityPerWeek, data = survey_data_transformed)
 summary(model_transformed_ects)
@@ -203,7 +208,7 @@ summary(model_no_outliers_HoursOfWork)
 
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 
 survey_design_no_outliers <- svydesign(id = ~1, data = survey_data_no_outliers, weights = ~1)
 model_original <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design_no_outliers)
@@ -214,7 +219,7 @@ model_transformed <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork
 summary(model_transformed)
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 # Create a scatterplot of ECTS vs. NumberOfPhysicalActivityPerWeek with regression line
 ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = ECTS)) +
   geom_point() +
@@ -249,6 +254,7 @@ ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = Com
 
 ```
 
+\newpage
 
 # Research Question 2
 
@@ -370,7 +376,7 @@ The exploratory data analysis indicates that we have a difference in number of p
 
 We, again gather statistical information with mean, median and standard deviation in number of physical activities per week with grouped age group.  
 
-```{r pressure, echo=FALSE}
+```{r echo=FALSE}
 summary_stats_transformed_rq2 <- survey_data_transformed %>%
   group_by(AgeGroup) %>%
   summarise(
@@ -512,26 +518,182 @@ With the method "transformed" we almost have a significant impact of the "under"
 
 The plots in the EDA indicated, that we have a difference between age groups and that "younger" participants have more active days in a week compared to "older" ones. Statistical summaries further showed the same results as the EDA investigation. But after evaluating the significance tests, we can say that there is no significant evidence that for our second research question.  
 
+\newpage
+
 # Research question 3
 
-"Full-time students engage in more variety of physical activities (2+) compared to students who work."
+Full-time students engage in more variety of physical activities (2+) compared to students who work.
 
 ## Exploratory Data Analysis
 
+We load the file.
 
+```{r file-loading}
+# Load the survey data
+survey_data <- read.csv("group14.csv", header=TRUE)
+names(survey_data) <- c("Gender", "Age", "Studies", "NumberOfPhysicalActivityPerWeek", "TypeOfPhysicalActivity", "WorkStudy")
 
+# Split WorkStudy into ECTS and HoursOfWork
+survey_data <- separate(survey_data, "WorkStudy", c("ECTS", "HoursOfWork"), sep=";")
 
+# Fix comma seperated numbers like 17,5 to 17.5 in order to not create NA values
+survey_data$ECTS <- as.numeric(str_replace(survey_data$ECTS, ",", "."))
+survey_data$ECTS <- survey_data$ECTS %>%
+  replace(is.na(.), 0)
 
-Choose appropriate methods to explore the categorical and quantitative features in your data set (one visualization per research question). Briefly explain the methods and comment on your findings.
+survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
+
+# We have 2 invalid inputs, "not often" and "Sunday", both resulting in a NA
+# "Sunday" will be translated to 1, as we can assume, that if the person did sports more than once a week, they would
+# have input more days
+# However, not often is too weak to make a correct assumptions, which we therefor delete the entry
+survey_data$NumberOfPhysicalActivityPerWeek <- str_replace(survey_data$NumberOfPhysicalActivityPerWeek, "Sunday", "1")
+survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(survey_data$NumberOfPhysicalActivityPerWeek)
+survey_data <- survey_data %>%
+  filter(!is.na(NumberOfPhysicalActivityPerWeek))
+
+# 1 ECTS = 25 Hours, Approximately 16 weeks per semester
+survey_data$WeeklyHours <- survey_data$HoursOfWork + ((survey_data$ECTS*25)/16)
+
+r3_data <- survey_data %>%
+  select(NumberOfPhysicalActivityPerWeek, TypeOfPhysicalActivity, HoursOfWork)
+```
+
+In order to answer R3 we need to define who is a Full-time student and who is a Working student.
+
+```{r student-types}
+r3_data <- r3_data %>%
+  mutate(Category = if_else(HoursOfWork==0, "Full-Time Student", "Working Student"))
+
+r3_data %>%
+  ggplot(aes(x=Category, fill=Category)) +
+  geom_histogram(stat = "count") +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.2, size = 5) +
+  labs(
+    title = "Number of Full-Time Students and Working Students",
+    x = "Category",
+    y = "Count"
+  ) +
+  theme(legend.position = "none")
+```
+Since the comparison between Full-Time Students and Working Students is not very balanced, we try to create sub groups to make the comparison groups more clear.
+
+```{r sub-category}
+r3_data <- r3_data %>%
+  mutate(SubCategory = case_when(
+    HoursOfWork == 0 ~ "0",
+    0 != HoursOfWork & HoursOfWork <= 10 ~ "1-10h",
+    10 < HoursOfWork & HoursOfWork <= 20 ~ "11-20h",
+    20 < HoursOfWork & HoursOfWork <= 30 ~ "21-30h",
+    30 < HoursOfWork ~ "30h+"
+  ))
+
+r3_data %>%
+  ggplot(aes(x=SubCategory, fill=SubCategory)) +
+  geom_histogram(stat = "count") +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.2, size = 5) +
+  labs(
+    title = "Number of students based on SubCategory",
+    x = "SubCategory",
+    y = "Count"
+  ) +
+  theme(legend.position = "none")
+```
+In addition we need to extract the different activities to sum up the amount of different physical activities each person is performing.
+
+```{r physical-variety}
+types_of_physcial_activity <- c("StrengthTraining", "Cardio", "RecreationalActivities", "BallSports", "FlexibilityAndMobilit", "MartialArt", "Other")
+
+r3_data <- r3_data %>%
+  mutate(StrengthTraining = if_else(str_detect(TypeOfPhysicalActivity, "Strength Training"), 1, 0),
+         Cardio = if_else(str_detect(TypeOfPhysicalActivity, "Cardio"), 1, 0),
+         RecreationalActivities = if_else(str_detect(TypeOfPhysicalActivity, "Recreational Activities"), 1, 0),
+         BallSports = if_else(str_detect(TypeOfPhysicalActivity, "Ball Sports"), 1, 0),
+         FlexibilityAndMobilit = if_else(str_detect(TypeOfPhysicalActivity, "Flexibility and Mobilit"), 1, 0),
+         MartialArt = if_else(str_detect(TypeOfPhysicalActivity, "Martial Art"), 1, 0),
+         Other = if_else(str_detect(TypeOfPhysicalActivity, "Other"), 1, 0)
+         ) %>%
+  select(-TypeOfPhysicalActivity)
+
+r3_data <- r3_data %>%
+  mutate(NumberOfDifferentActivity = rowSums(r3_data[, types_of_physcial_activity]))
+
+```
 
 ## Descriptive Inference
 
-Compute suitable summary statistics and display the results in a table.
+We calculate the mean of the number of different activity to compare the results for R3.
+
+```{r mean-full-working}
+r3_data %>%
+  group_by(Category) %>%
+  summarize(
+    MeanNumberOfDifferentActivity=mean(NumberOfDifferentActivity)
+  )
+
+r3_data %>%
+  group_by(SubCategory) %>%
+  summarize(
+    MeanNumberOfDifferentActivity=mean(NumberOfDifferentActivity)
+  )
+```
 
 ## Analytic Inference
 
-Select an appropriate test statistic to test your hypothesis. Summarize the results and explain how your findings are connected to your research question.
-Guidelines for the presentation:
+At first we check if our data has normal distribution.
+
+```{r}
+shapiro.test(
+  r3_data$NumberOfDifferentActivity[r3_data$Category == "Full-Time Student"])
+
+shapiro.test(
+  r3_data$NumberOfDifferentActivity[r3_data$Category == "Working Student"])
+```
+
+Since it is not, we can use the Mann-Whitney/Wilcoxon test to check if we can accept or reject our H0.
+
+H0 - There is no significant difference in the number of physical activity between full-time students and working students.
+H1 - There is significant difference in the number of physicial activity between full-time students and working students.
+
+A value of < 0.05 means that we can reject the null hypotheses and accept our R3.
+
+```{r}
+p_value_base <- wilcox.test(NumberOfDifferentActivity ~ Category, data = r3_data)
+p_value_base
+```
+Since the value is above 0.05, we can't reject H0, meaning that R3 is rejected.
+
+However, we already created subcategories to further specify the working students group to see, if there is a subgroup, for which the R3 holds.
+
+```{r}
+r3_data$SubCategory <- as.factor(r3_data$SubCategory)
+
+r3_group1 <- r3_data %>% 
+  filter(SubCategory=="0" | SubCategory=="1-10h")
+
+r3_group2 <- r3_data %>% 
+  filter(SubCategory=="0" | SubCategory=="11-20h")
+
+r3_group3 <- r3_data %>% 
+  filter(SubCategory=="0" | SubCategory=="21-30h")
+
+r3_group4 <- r3_data %>% 
+  filter(SubCategory=="0" | SubCategory=="30h+")
+
+p_value_group1 <- wilcox.exact(NumberOfDifferentActivity ~ SubCategory, data = r3_group1, exact = TRUE)
+p_value_group2 <- wilcox.exact(NumberOfDifferentActivity ~ SubCategory, data = r3_group2, exact = TRUE)
+p_value_group3 <- wilcox.exact(NumberOfDifferentActivity ~ SubCategory, data = r3_group3, exact = TRUE)
+p_value_group4 <- wilcox.exact(NumberOfDifferentActivity ~ SubCategory, data = r3_group4, exact = TRUE)
+
+df <- data.frame(
+  Group = c("Full-Time Student vs. Working Student", "1-10h", "11-20h", "21-30h", "30h+"),
+  p_value = c(p_value_base$p.value, p_value_group1$p.value, p_value_group2$p.value, p_value_group3$p.value, p_value_group4$p.value)
+)
+
+df
+```
+
+We can see that only one group rejects the null hypothesis. If we can compare full-time students with students working more than 30h we can see a significant difference in the number of different physical activities.
 
 ...
 
