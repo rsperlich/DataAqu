@@ -81,9 +81,11 @@ ggplot(survey_data, aes(x = NumberOfPhysicalActivityPerWeek)) +
 ```
 ### Comment on EDA
 
-The histogram shows the distribution of how often participants engage in physical activities per week. This helps us understand the general trend and spread of physical activity frequency among participants. It can be seen that some numbers are quite high, this could be either due to the question being understood wrong or outliers. Both cases should be considered. Therefore we create 2 different dataframes, one that considers the outliers and eliminates them and one that transforms the values by %20. 
+The histogram shows the distribution of how often participants engage in physical activities per week. This helps us understand the general trend and spread of physical activity frequency among participants. It can be seen that some numbers are quite high, this could be either due to the question being understood wrong or outliers. Both cases should be considered. Therefore we create 2 different dataframes, one that considers the outliers and eliminates them and one that transforms the values by dividing by 20. 
 
 ### Outlier removal 
+
+
 
 ```{r echo=FALSE}
 Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
@@ -108,7 +110,9 @@ ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek)) +
        y = "Count")
 ```
 
-### Outlier removal 
+### Outlier removal and preprocessing
+
+We further make a new column which adds the total amount of work per week to the data frames. This is done by multiplying the amount of ECTS by the hours one ects take (25) and by the average weeks of a semester (16). This is our output for the whole tasks that are achieved by a person. This enables us to perform further analysis in this regard.
 
 ```{r echo=FALSE}
 Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
@@ -177,6 +181,8 @@ kable(summary_stats_transformed,
       caption = "Summary statistics transformed data")
 ```
 
+In the summary we cannot immediatly see the a positive relationship between the productivity and the hours of work. 
+
 ```{r}
 kable(summary_stats_no_outliers, 
       caption = "Summary statistics no outliers in physical activities")
@@ -185,6 +191,8 @@ kable(summary_stats_no_outliers,
 ## Analytic Inference
 
 ### Hypothesis Testing
+
+To test our hypothesis we create linear models that check if a higher number of physical activities per week results in more work output.
 
 ```{r echo=FALSE}
 
@@ -200,24 +208,17 @@ summary(model_transformed_HoursOfWork)
 model_no_outliers_HoursOfWork <- lm(HoursOfWork ~ NumberOfPhysicalActivityPerWeek, data = survey_data_no_outliers)
 summary(model_no_outliers_HoursOfWork)
 
-model_transformed_HoursOfWork <- lm(NumberOfPhysicalActivityPerWeek ~ CompositeProductivity, data = survey_data_transformed)
+model_transformed_CompositeProductivity<- lm(CompositeProductivity ~ NumberOfPhysicalActivityPerWeek, data = survey_data_transformed)
 summary(model_transformed_HoursOfWork)
 
-model_no_outliers_HoursOfWork <- lm(  NumberOfPhysicalActivityPerWeek ~ CompositeProductivity, data = survey_data_no_outliers)
+model_no_outliers_CompositeProductivity <- lm(CompositeProductivity ~ NumberOfPhysicalActivityPerWeek,, data = survey_data_no_outliers)
 summary(model_no_outliers_HoursOfWork)
 
+
 ```
 
-```{r echo=FALSE}
-
-survey_design_no_outliers <- svydesign(id = ~1, data = survey_data_no_outliers, weights = ~1)
-model_original <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design_no_outliers)
-summary(model_original)
-
-survey_design_transformed <- svydesign(id = ~1, data = survey_data_transformed, weights = ~1)
-model_transformed <- svyglm(ECTS ~ NumberOfPhysicalActivityPerWeek + HoursOfWork, design = survey_design_transformed)
-summary(model_transformed)
-```
+The numbers indicate that there are positive relationsships, but none of them 
+are statistically significant. This can further be seen in scatter Plots with the linear model. 
 
 ```{r echo=FALSE}
 # Create a scatterplot of ECTS vs. NumberOfPhysicalActivityPerWeek with regression line
