@@ -17,6 +17,7 @@ library(survey)
 library(knitr)
 library(exactRankTests)
 library(kableExtra)
+library(gridExtra)
 ```
 
 \newpage
@@ -261,7 +262,7 @@ The linear models examining ECTS and Hours of Work relative to weekly physical a
 
 ```{r echo=FALSE}
 # Create a scatterplot of ECTS vs. NumberOfPhysicalActivityPerWeek with regression line
-ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = ECTS)) +
+ plot1 <- ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = ECTS)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
   labs(title = "Scatterplot of ECTS vs. Number of Physical Activities per Week",
@@ -269,32 +270,33 @@ ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = ECT
        y = "ECTS Credits") +
   theme_minimal()
 
-ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = ECTS)) +
+  plot2 <- ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = ECTS)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
-  labs(title = "Scatterplot of ECTS vs. Number of Physical Activities per Week",
+  labs(title = "ECTS vs. \nNumber of Physical Activities per Week",
        x = "Number of Physical Activities per Week",
        y = "ECTS Credits") +
   theme_minimal()
 
-ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = WeeklyHours)) +
+  plot3 <- ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = WeeklyHours)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
-  labs(title = "Scatterplot of Composite Productivity vs. Number of Physical Activities per Week",
+  labs(title = "Total weekly hours vs.\nNumber of Physical Activities per Week",
        x = "Number of Physical Activities per Week",
        y = "Composite Productivity (Hours of Work + ECTS)") +
   theme_minimal()
-ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = WeeklyHours)) +
+  plot4 <- ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = WeeklyHours)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
-  labs(title = "Scatterplot of Composite Productivity vs. Number of Physical Activities per Week",
+  labs(title = "Composite Productivity vs. Number of Physical Activities per Week",
        x = "Number of Physical Activities per Week",
        y = "Composite Productivity (Hours of Work + ECTS)") +
   theme_minimal()
 
+grid.arrange(plot2,plot3, ncol=2)
 ```
 
-These visualizations reinforce the conclusion that while there are trends indicating a positive relationship between physical activity and productivity, these are not statistically significant.
+These visualizations reinforce the conclusion that while there are trends indicating a positive relationship between physical activity and productivity, these are not statistically significant. Note: We plotted only two graphs as the difference between no outliers and transformed data was negligible and would not strengthen nor weaken the argument.
 
 \newpage
 
