@@ -16,6 +16,7 @@ library(tidyr)
 library(survey)
 library(knitr)
 library(exactRankTests)
+library(kableExtra)
 ```
 
 \newpage
@@ -38,7 +39,18 @@ Research questions we want to answer:
 
 ## Prepare data
 
-```{r cars}
+To analyze the survey data effectively, we started by loading and renaming the columns. The data is loaded from a CSV file that was provided from our survey. We also set the column names to more readable titles: Gender, Age, Studies, NumberOfPhysicalActivityPerWeek, TypeOfPhysicalActivity, and WorkStudy.
+
+Next, we need to separate the combined WorkStudy column into two distinct columns: ECTS and HoursOfWork. This was done because the quastion asked for a answer that combines the two.
+This is done using the separate function, with ; as the delimiter. After splitting, we encounter comma-separated values in the ECTS column, which we convert to period-separated values using the str_replace function. This step ensures that the ECTS values are in the correct numeric format and any NA values are replaced with 0 to avoid errors in further calculations.
+
+We proceed to clean and convert the data in other columns. The HoursOfWork column is converted to a numeric type. For the NumberOfPhysicalActivityPerWeek column we handle non-numeric entries such as "Sunday" by replacing them with numeric values (e.g., "Sunday" is replaced with 1 as we asume the person meant that they do physical activity on sunday) and then converting the column to numeric. Any remaining NA values in this column are filtered out oso that our analysis is based on valid data entries.
+
+To provide a more information on the participant's weekly time commitment, we calculate the WeeklyHours by combining the HoursOfWork with the study hours derived from ECTS credits. The conversion assumes 1 ECTS equals 25 hours of study over a 16-week semester. This step allows us to analyze the total weekly workload of each participant.
+
+We also create a selection of the relevant columns for the third question: NumberOfPhysicalActivityPerWeek, TypeOfPhysicalActivity, and HoursOfWork. This selection focuses our analysis on the key aspects related to physical activity and work commitments, providing a streamlined dataset for more detailed insights.
+
+```{r}
 # Load the survey data
 survey_data <- read.csv("group14.csv", header=TRUE)
 names(survey_data) <- c("Gender", "Age", "Studies", 
@@ -51,41 +63,35 @@ survey_data <- separate(survey_data,
                         "WorkStudy", 
                         c("ECTS", "HoursOfWork"), sep=";")
 
-# unify different comma representations for ECTS before coercion
-survey_data$ECTS <- as.numeric(sub(",", ".", survey_data$ECTS, fixed = TRUE))
+# Fix comma seperated numbers like 17,5 to 17.5 in order to not create NA values
+survey_data$ECTS <- as.numeric(str_replace(survey_data$ECTS, ",", "."))
+survey_data$ECTS <- survey_data$ECTS %>%
+  replace(is.na(.), 0)
+
+
 survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
 survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(
   survey_data$NumberOfPhysicalActivityPerWeek)
-
+survey_data$NumberOfPhysicalActivityPerWeek <- 
+  str_replace(survey_data$NumberOfPhysicalActivityPerWeek, "Sunday", "1")
+survey_data$NumberOfPhysicalActivityPerWeek <- 
+  as.numeric(survey_data$NumberOfPhysicalActivityPerWeek)
+survey_data <- survey_data %>%
+  filter(!is.na(NumberOfPhysicalActivityPerWeek))
 # Display the data
-kable(head(survey_data), caption = "Survey data set")
+kable(head(survey_data), caption = "Survey data set", col.widths = rep("auto", ncol(survey_data)))
+
+
+survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
+survey_data$WeeklyHours <- survey_data$HoursOfWork + ((survey_data$ECTS*25)/16)
+
+r3_data <- survey_data %>%
+  select(NumberOfPhysicalActivityPerWeek, TypeOfPhysicalActivity, HoursOfWork)
 ```
-
-With the data prepared, we can now answer our research questions.  
-
-\newpage
-
-# Research Question 1
-
-## Exploratory Data Analysis (EDA)
-
-### Visualization for Research Question 1
-
-```{r echo=FALSE}
-# Histogram of Physical Activity Frequency
-ggplot(survey_data, aes(x = NumberOfPhysicalActivityPerWeek)) +
-  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
-  labs(title = "Histogram of Physical Activity Frequency per Week",
-       x = "Number of Physical Activities per Week",
-       y = "Count")
-```
-### Comment on EDA
-
-The histogram shows the distribution of how often participants engage in physical activities per week. This helps us understand the general trend and spread of physical activity frequency among participants. It can be seen that some numbers are quite high, this could be either due to the question being understood wrong or outliers. Both cases should be considered. Therefore we create 2 different dataframes, one that considers the outliers and eliminates them and one that transforms the values by dividing by 20. 
 
 ### Outlier removal 
 
-
+To handle outliers, we calculate the interquartile range (IQR) and filter out values outside the lower and upper bounds. For the transformed dataset, extreme values are scaled down by dividing them by 20, ensuring a more uniform distribution.
 
 ```{r echo=FALSE}
 Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
@@ -96,11 +102,74 @@ lower_bound <- Q1 - 1.5 * IQR
 upper_bound <- Q3 + 1.5 * IQR
 
 survey_data_no_outliers <- survey_data %>%
-  filter(NumberOfPhysicalActivityPerWeek >= lower_bound & NumberOfPhysicalActivityPerWeek <= upper_bound)
+  filter(NumberOfPhysicalActivityPerWeek >= lower_bound & 
+           NumberOfPhysicalActivityPerWeek <= upper_bound)
 
 kable(head(survey_data_no_outliers), 
-      caption = "Data with removed outliers in physical activity")
+      caption = "Data with removed outliers in physical activity", col.widths = rep("auto", ncol(survey_data_no_outliers)))
+
+survey_data_transformed <- survey_data %>%
+  mutate(NumberOfPhysicalActivityPerWeek = ifelse(
+    NumberOfPhysicalActivityPerWeek < lower_bound | 
+      NumberOfPhysicalActivityPerWeek > upper_bound,
+    NumberOfPhysicalActivityPerWeek / 20,
+    NumberOfPhysicalActivityPerWeek
+  ))
+
+kable(head(survey_data_transformed), 
+      caption = "Data with transformed physical activity", col.widths = rep("auto", ncol(survey_data_transformed)))
 ```
+
+
+In order to analyse if younger participants perform more physical activity per week more precisely, we need to create at least two age groups. We will categorize the participants based on the median age. Splitting on the median should leave us with relatively balanced groups in the age groups. Ages larger as the median are set in the "over" and smaller ones in the "under" group. We are performing this categorization on the original and transformed data set.  
+
+```{r}
+# no outlier survey data set
+survey_data_no_outliers$AgeGroup <- 
+  as.factor(
+    ifelse(survey_data_no_outliers$Age > median(survey_data_no_outliers$Age), 
+         "over", "under")
+  )
+
+# transformed survey data set
+survey_data_transformed$AgeGroup <- 
+  as.factor(
+    ifelse(survey_data_transformed$Age > median(survey_data_transformed$Age), 
+         "over", "under")
+  )
+```
+
+
+
+With the data prepared, we can now answer our research questions.  
+
+\newpage
+
+# Research Question 1: Individuals who engage in regular physical activity will demonstrate a higher level of productivity in completing tasks for university or work compared to those who do not engage in regular physical activity.
+
+
+To investigate the hypothesis that individuals who engage in regular physical activity demonstrate a higher level of productivity in completing tasks for university or work compared to those who do not, we perform an analysis in three main steps: Exploratory Data Analysis (EDA), Descriptive Inference, and Analytic Inference.
+
+## Exploratory Data Analysis (EDA)
+
+### Visualization for Research Question 1
+
+We begin by visualizing the distribution of physical activity frequency among participants. This is done using a histogram that shows how often participants engage in physical activities per week
+
+```{r echo=FALSE}
+# Histogram of Physical Activity Frequency
+ggplot(survey_data, aes(x = NumberOfPhysicalActivityPerWeek)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  labs(title = "Histogram of Physical Activity Frequency per Week",
+       x = "Number of Physical Activities per Week",
+       y = "Count")
+```
+
+### Comment on EDA
+
+The histogram shows the distribution of how often participants engage in physical activities per week. This helps us understand the general trend and spread of physical activity frequency among participants. It can be seen that some numbers are quite high, this could be either due to the question being understood wrong or outliers. Both cases should be considered. Therefore we create 2 different dataframes, one that considers the outliers and eliminates them and one that transforms the values by dividing by 20. 
+
+
 
 ```{r}
 ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek)) +
@@ -110,40 +179,6 @@ ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek)) +
        y = "Count")
 ```
 
-### Outlier removal and preprocessing
-
-We further make a new column which adds the total amount of work per week to the data frames. This is done by multiplying the amount of ECTS by the hours one ects take (25) and by the average weeks of a semester (16). This is our output for the whole tasks that are achieved by a person. This enables us to perform further analysis in this regard.
-
-```{r echo=FALSE}
-Q1 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.25, na.rm = TRUE)
-Q3 <- quantile(survey_data$NumberOfPhysicalActivityPerWeek, 0.75, na.rm = TRUE)
-IQR <- Q3 - Q1
-
-lower_bound <- Q1 - 1.5 * IQR
-upper_bound <- Q3 + 1.5 * IQR
-
-survey_data_transformed <- survey_data %>%
-  mutate(NumberOfPhysicalActivityPerWeek = ifelse(
-    NumberOfPhysicalActivityPerWeek < lower_bound | NumberOfPhysicalActivityPerWeek > upper_bound,
-    NumberOfPhysicalActivityPerWeek / 20,
-    NumberOfPhysicalActivityPerWeek
-  ))
-
-kable(head(survey_data_transformed), 
-      caption = "Data with transformed physical activity")
-
-# transofrm ects to work hours per week
-survey_data_transformed <- survey_data_transformed %>%
-  mutate(hours_of_work_ects = ECTS * 25 / 16)
-survey_data_no_outliers <- survey_data_no_outliers %>%
-  mutate(hours_of_work_ects = ECTS * 25 / 16)
-# Create the composite measure
-survey_data_transformed <- survey_data_transformed %>%
-  mutate(CompositeProductivity = hours_of_work_ects + HoursOfWork)
-
-survey_data_no_outliers <- survey_data_no_outliers %>%
-  mutate(CompositeProductivity = hours_of_work_ects + HoursOfWork)
-```
 
 ```{r}
 ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek)) +
@@ -156,6 +191,8 @@ ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek)) +
 ## Descriptive Inference
 
 ### Summary Statistics
+
+To gain insights, we compute summary statistics for both the transformed data and the dataset without outliers. This includes mean and standard deviation for ECTS and Hours of Work, grouped by the number of physical activities per week.
 
 ```{r echo=FALSE}
 summary_stats_transformed <- survey_data_transformed %>%
@@ -176,12 +213,14 @@ summary_stats_no_outliers <- survey_data_no_outliers %>%
   )
 ```
 
+The summary statistics tables provide a detailed view of how physical activity correlates with productivity measures.
+
 ```{r}
 kable(summary_stats_transformed, 
       caption = "Summary statistics transformed data")
 ```
 
-In the summary we cannot immediatly see the a positive relationship between the productivity and the hours of work. 
+In the summary we cannot immediately see the a positive relationship between the productivity and the hours of work. 
 
 ```{r}
 kable(summary_stats_no_outliers, 
@@ -208,17 +247,17 @@ summary(model_transformed_HoursOfWork)
 model_no_outliers_HoursOfWork <- lm(HoursOfWork ~ NumberOfPhysicalActivityPerWeek, data = survey_data_no_outliers)
 summary(model_no_outliers_HoursOfWork)
 
-model_transformed_CompositeProductivity<- lm(CompositeProductivity ~ NumberOfPhysicalActivityPerWeek, data = survey_data_transformed)
+model_transformed_WeeklyHours <- lm(WeeklyHours ~ NumberOfPhysicalActivityPerWeek, data = survey_data_transformed)
 summary(model_transformed_HoursOfWork)
 
-model_no_outliers_CompositeProductivity <- lm(CompositeProductivity ~ NumberOfPhysicalActivityPerWeek,, data = survey_data_no_outliers)
+model_no_outliers_WeeklyHours <- lm(WeeklyHours ~ NumberOfPhysicalActivityPerWeek, data = survey_data_no_outliers)
 summary(model_no_outliers_HoursOfWork)
 
 
 ```
 
-The numbers indicate that there are positive relationsships, but none of them 
-are statistically significant. This can further be seen in scatter Plots with the linear model. 
+The linear models examining ECTS and Hours of Work relative to weekly physical activities indicate a positive relationship but no statistical significance. Both ECTS models indicate a positive trend, yet fail to reach significance (p = 0.149 and p = 0.233). Similarly, the Hours of Work models show coefficients that are not statistically different from zero (p = 0.581 and p = 0.533). These results suggest that while there may be trends suggesting more physical activity correlates with higher productivity measures, further data is necessary to confirm a statistical significance.
+
 
 ```{r echo=FALSE}
 # Create a scatterplot of ECTS vs. NumberOfPhysicalActivityPerWeek with regression line
@@ -238,14 +277,14 @@ ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = ECT
        y = "ECTS Credits") +
   theme_minimal()
 
-ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = CompositeProductivity)) +
+ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek, y = WeeklyHours)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
   labs(title = "Scatterplot of Composite Productivity vs. Number of Physical Activities per Week",
        x = "Number of Physical Activities per Week",
        y = "Composite Productivity (Hours of Work + ECTS)") +
   theme_minimal()
-ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = CompositeProductivity)) +
+ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = WeeklyHours)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "blue") +
   labs(title = "Scatterplot of Composite Productivity vs. Number of Physical Activities per Week",
@@ -254,6 +293,8 @@ ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek, y = Com
   theme_minimal()
 
 ```
+
+These visualizations reinforce the conclusion that while there are trends indicating a positive relationship between physical activity and productivity, these are not statistically significant.
 
 \newpage
 
@@ -286,24 +327,6 @@ ggplot(survey_data_grouped_age, aes(x = Age, y = Mean_PhysicalActivity)) +
 
 The plot shows, that we have some missing ages across the whole survey data - mostly with age values larger then the median age. We can also see, that we have the largest mean with age 45. With this plot, it is not very clear if younger participants really perform more physical activities but it seems like "younger" (age < median) participants participate in more physical activities.  
 
-In order to analyse if younger participants perform more physical activity per week more precisely, we need to create at least two age groups. We will categorize the participants based on the median age. Splitting on the median should leave us with relatively balanced groups in the age groups. Ages larger as the median are set in the "over" and smaller ones in the "under" group. We are performing this categorization on the original and transformed data set.  
-
-```{r}
-# no outlier survey data set
-survey_data_no_outliers$AgeGroup <- 
-  as.factor(
-    ifelse(survey_data_no_outliers$Age > median(survey_data_no_outliers$Age), 
-         "over", "under")
-  )
-
-# transformed survey data set
-survey_data_transformed$AgeGroup <- 
-  as.factor(
-    ifelse(survey_data_transformed$Age > median(survey_data_transformed$Age), 
-         "over", "under")
-  )
-```
-
 We can combine both methods into one data frame for easier plotting.  
 
 ```{r}
@@ -331,7 +354,7 @@ ggplot(survey_data_combined, aes(x = AgeGroup, fill = AgeGroup)) +
   theme(legend.position = "none")
 ```
 
-The plots shows, that we have perfect balance in the "no outlier" and a slight inbalance in "tranformed" approach. The inbalance could influence the hypothesis tests.    
+The plots shows, that we have perfect balance in the "no outlier" and a slight inbalance in "transformed" approach. The inbalance could influence the hypothesis tests.    
 
 We can visualize both groups by grouping the age group and computing the mean of number of physical activities. This can give us a good first impression if we have a difference in the groups. We start with the bar plots for the data without outliers.   
 
@@ -528,38 +551,6 @@ Full-time students engage in more variety of physical activities (2+) compared t
 ## Exploratory Data Analysis
 
 We load the file.
-
-```{r file-loading}
-# Load the survey data
-survey_data <- read.csv("group14.csv", header=TRUE)
-names(survey_data) <- c("Gender", "Age", "Studies", "NumberOfPhysicalActivityPerWeek", "TypeOfPhysicalActivity", "WorkStudy")
-
-# Split WorkStudy into ECTS and HoursOfWork
-survey_data <- separate(survey_data, "WorkStudy", c("ECTS", "HoursOfWork"), sep=";")
-
-# Fix comma seperated numbers like 17,5 to 17.5 in order to not create NA values
-survey_data$ECTS <- as.numeric(str_replace(survey_data$ECTS, ",", "."))
-survey_data$ECTS <- survey_data$ECTS %>%
-  replace(is.na(.), 0)
-
-survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
-
-# We have 2 invalid inputs, "not often" and "Sunday", both resulting in a NA
-# "Sunday" will be translated to 1, as we can assume, that if the person did sports more than once a week, they would
-# have input more days
-# However, not often is too weak to make a correct assumptions, which we therefor delete the entry
-survey_data$NumberOfPhysicalActivityPerWeek <- str_replace(survey_data$NumberOfPhysicalActivityPerWeek, "Sunday", "1")
-survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(survey_data$NumberOfPhysicalActivityPerWeek)
-survey_data <- survey_data %>%
-  filter(!is.na(NumberOfPhysicalActivityPerWeek))
-
-# 1 ECTS = 25 Hours, Approximately 16 weeks per semester
-survey_data$WeeklyHours <- survey_data$HoursOfWork + ((survey_data$ECTS*25)/16)
-
-r3_data <- survey_data %>%
-  select(NumberOfPhysicalActivityPerWeek, TypeOfPhysicalActivity, HoursOfWork)
-```
-
 In order to answer R3 we need to define who is a Full-time student and who is a Working student.
 
 ```{r student-types}
