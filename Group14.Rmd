@@ -66,7 +66,7 @@ survey_data$ECTS <- survey_data$ECTS %>% replace(is.na(.), 0)
 
 We proceed to clean and convert the data in other columns. The HoursOfWork column is converted to a numeric type. For the NumberOfPhysicalActivityPerWeek column we handle non-numeric entries such as "Sunday" by replacing them with numeric values (e.g., "Sunday" is replaced with 1 because we assume the person meant that they do physical activity on a Sunday, meaning once a week) and then converting the column to numeric. Any remaining NA values in this column are filtered out so that our analysis is based on valid data entries.  
 
-```{r}
+```{r warning=FALSE}
 survey_data$HoursOfWork <- as.numeric(survey_data$HoursOfWork)
 
 survey_data$NumberOfPhysicalActivityPerWeek <- as.numeric(
@@ -223,7 +223,8 @@ ggplot(survey_data, aes(x = NumberOfPhysicalActivityPerWeek)) +
 
 ### Comment on EDA
 
-The histogram shows the distribution of how often participants engage in physical activities per week. This helps us understand the general trend and spread of physical activity frequency among participants. It can be seen that some numbers are quite high, this could be either due to the question being understood wrong or outliers. Both cases should be considered. Therefore we create 2 different dataframes, one that considers the outliers and eliminates them and one that transforms the values by dividing by 20. 
+The histogram shows the distribution of how often participants engage in physical activities per week. This helps us understand the general trend and spread of physical activity frequency among participants. It can be seen that some numbers are quite high, this could be either due to the question being understood wrong or outliers. Both cases should be considered. Therefore we create 2 different dataframes, one that considers the outliers and eliminates them and one that transforms the values by dividing by 20. In the following you can see the two distributions
+
 
 ```{r}
 ggplot(survey_data_no_outliers, aes(x = NumberOfPhysicalActivityPerWeek)) +
@@ -241,6 +242,8 @@ ggplot(survey_data_transformed, aes(x = NumberOfPhysicalActivityPerWeek)) +
        x = "Number of Physical Activities per Week",
        y = "Count")
 ```
+
+The histograms slightly differ. This is due to the transformation as more Data is available and therefore the distribution differs slightly.
 
 ## Descriptive Inference
 
